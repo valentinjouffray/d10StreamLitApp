@@ -1,0 +1,7 @@
+[project]
+name = "d10streamlitapp"
+version = "0.1.0"
+description = "Application Streamlit afin d'analyser des données de vin"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
