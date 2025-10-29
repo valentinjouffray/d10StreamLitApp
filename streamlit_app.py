@@ -95,3 +95,9 @@ with visualisations:
             st.pyplot(st.session_state.pairplot_fig)
 
     title('Matrice de corrélation')
+    df_num = df[num_cols]
+    corr = df_num.corr()
+    fig, ax = plt.subplots()
+    sns.heatmap(corr, annot=True, annot_kws={'size': 6}, fmt='.2f', cmap='coolwarm', cbar=True, ax=ax, center=0,
+                linewidths=.5)
+    st.pyplot(fig)
