@@ -94,7 +94,7 @@ with visualisations:
         elif st.session_state.pairplot_fig is not None:
             st.pyplot(st.session_state.pairplot_fig)
 
-    title('Matrice de corrélation', 2)
+    title('Matrice de corrélation')
     df_num = df[num_cols]
     corr = df_num.corr()
     fig, ax = plt.subplots()
