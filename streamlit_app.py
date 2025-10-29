@@ -88,10 +88,10 @@ with visualisations:
         # Création du pairplot avec Seaborn
         if st.button("Mettre à jour le graphique", disabled=disabled):
             st.session_state.pairplot_fig = sns.pairplot(df[selected_vars], hue='target')
+            st.session_state.pairplot_fig.legend.set_title("Type de vin")
             # Affichage dans Streamlit
             st.pyplot(st.session_state.pairplot_fig)
-
-    if st.session_state.pairplot_fig is not None:
-        st.pyplot(st.session_state.pairplot_fig)
+        elif st.session_state.pairplot_fig is not None:
+            st.pyplot(st.session_state.pairplot_fig)
 
     title('Matrice de corrélation')
