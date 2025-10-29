@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import streamlit as st
+from pandas import DataFrame, Series
+from sklearn import metrics
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
@@ -117,55 +119,68 @@ with modelisation:
     target = "target"
     features = [col for col in df_fixed.columns if col not in target]
 
+    pourcentage = st.number_input(label="Pourcentage de données de test", placeholder=80, step=1, min_value=1,
+                                  max_value=100, value=20)
+
+    X_train: DataFrame
+    X_test: DataFrame
+    y_train: Series
+    y_test: Series
     X_train, X_test, y_train, y_test = train_test_split(
         df_fixed[features],
         df_fixed[target],
-        test_size=0.2,
+        test_size=pourcentage / 100,
         random_state=42
     )
+
+    message1 = f"Quantité dans les données d'entraînement : {len(X_train)}"
+    message2 = f"Quantité dans les données de test : {len(X_test)}"
+    messages = [message1, message2]
+    text_cols = st.columns(2, border=True)
+    for col, message in zip(text_cols, messages):
+        with col:
+            st.write(message)
 
     preprocessor = ColumnTransformer(
         transformers=[],
         remainder="passthrough"
     )
 
+    profondeur_perso = st.number_input(label='Profondeur personalisée (0 pour valeur par défaut)', min_value=0,
+                                       max_value=500, step=1)
+    nb_max_feuilles = st.number_input(label='Nombre maximal de feuilles personalisée (0 pour valeur par défaut)',
+                                      min_value=0, max_value=50, step=1)
+
     pipe = Pipeline(
         steps=[
             ('preprocessor', preprocessor),
             ('scaler', StandardScaler()),
-            ('regressor', RandomForestClassifier(random_state=42))
+            ('regressor',
+             RandomForestClassifier(random_state=42, max_depth=profondeur_perso if profondeur_perso > 0 else None,
+                                    max_leaf_nodes=nb_max_feuilles if nb_max_feuilles > 0 else None))
         ]
     )
 
-    depths = [3, 5, 7]
-    n_estimators = [100, 200, 300]
-
     pipe.fit(X_train, y_train)
 
-    df_predict = X_test.copy()
-    df_predict['target_predict'] = pipe.predict(X_test)
-    df_predict['target_true'] = y_test
+    df_test_predict = X_test.copy()
+    # Scores
+    test_predict = pipe.predict(X_test)
+    train_predict = pipe.predict(X_train)
+    # DF test avec prédictions et valeurs réelles
+    df_test_predict['target_predict'] = test_predict
+    df_test_predict['target_true'] = y_test
 
-    st.write(df_predict)
+    title('Evaluation', 2)
 
-    # gridsearch = model_selection.GridSearchCV(
-    #     pipe,
-    #     param_grid={
-    #         "regressor__max_depth": depths,
-    #         "regressor__n_estimators": n_estimators,
-    #     },
-    #     scoring="neg_mean_squared_error",
-    #     cv=3,
-    #     n_jobs=-1,
-    #     refit=True,
-    #     return_train_score=True,
-    #     verbose=1,
-    # )
-    # gridsearch.fit(X_train, y_train)
-    #
-    # (
-    #     pd.DataFrame(gridsearch.cv_results_)
-    #     .sort_values(by="rank_test_score")
-    #     .drop("params", axis=1)
-    #     .style.background_gradient()
-    # )
+    # Scores d'évaluation
+    acc_train = metrics.accuracy_score(y_train, train_predict)
+    acc_test = metrics.accuracy_score(y_test, test_predict)
+    scores = [acc_train, acc_test]
+    messages = [f"Accuracy à lentraînement : {acc_train}", f"Accuracy aux tests : {acc_test}"]
+    text_cols = st.columns(2, border=True)
+    for col, message in zip(text_cols, messages):
+        with col:
+            st.write(message)
+
+    st.write(df_test_predict)
