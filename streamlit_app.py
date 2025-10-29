@@ -2,16 +2,10 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import streamlit as st
-from sklearn import (
-    pipeline,
-    metrics,
-    linear_model,
-    model_selection,
-    compose,
-    preprocessing,
-    tree,
-    ensemble
-)
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from utils.util import title
@@ -77,7 +71,6 @@ with visualisations:
 
     title('Visualisation des variables catégorielles')
     fig, ax = plt.subplots()
-    #sns.displot(df_fixed['target'], ax=ax, hue='target')
     sns.histplot(data=df_fixed, x='target', hue='target', multiple='stack')
     legend = ax.get_legend()
     legend.set_title("Type de vin")
@@ -120,34 +113,27 @@ with visualisations:
     st.pyplot(fig)
 
 with modelisation:
-
     title('Division des données')
-    target = ["target"]
+    target = "target"
     features = [col for col in df_fixed.columns if col not in target]
 
-    print(features)
-
-    X_train, X_test, y_train, y_test = model_selection.train_test_split(
+    X_train, X_test, y_train, y_test = train_test_split(
         df_fixed[features],
         df_fixed[target],
         test_size=0.2,
         random_state=42
     )
 
-    X_train.columns
-
-    cat_col = "target"
-
-    preprocessor = compose.ColumnTransformer(
+    preprocessor = ColumnTransformer(
         transformers=[],
         remainder="passthrough"
     )
 
-    pipe = pipeline.Pipeline(
+    pipe = Pipeline(
         steps=[
             ('preprocessor', preprocessor),
             ('scaler', StandardScaler()),
-            ('regressor', ensemble.RandomForestRegressor())
+            ('regressor', RandomForestClassifier(random_state=42))
         ]
     )
 
@@ -156,7 +142,11 @@ with modelisation:
 
     pipe.fit(X_train, y_train)
 
+    df_predict = X_test.copy()
+    df_predict['target_predict'] = pipe.predict(X_test)
+    df_predict['target_true'] = y_test
 
+    st.write(df_predict)
 
     # gridsearch = model_selection.GridSearchCV(
     #     pipe,
@@ -179,6 +169,3 @@ with modelisation:
     #     .drop("params", axis=1)
     #     .style.background_gradient()
     # )
-
-
-
