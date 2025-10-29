@@ -2,6 +2,17 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import streamlit as st
+from sklearn import (
+    pipeline,
+    metrics,
+    linear_model,
+    model_selection,
+    compose,
+    preprocessing,
+    tree,
+    ensemble
+)
+from sklearn.preprocessing import StandardScaler
 
 from utils.util import title
 
@@ -54,9 +65,11 @@ with tab_traitement_donnees:
         "Il semble y avoir une typo dans la catégorie 'Vin éuilibré', il faut modifier les valeurs incorrectes dans la colonne 'target'."
     )
 
-    df['target_fixed'] = df['target'].replace({'Vin éuilibré': 'Vin équilibré'})
+    df_fixed = df
+
+    df_fixed['target'] = df_fixed['target'].replace({'Vin éuilibré': 'Vin équilibré'})
     title('Valeurs possibles après correction de la typo', 2)
-    st.write(set(df['target_fixed']))
+    st.write(set(df_fixed['target']))
 
 with visualisations:
     if 'pairplot_fig' not in st.session_state:
@@ -64,16 +77,20 @@ with visualisations:
 
     title('Visualisation des variables catégorielles')
     fig, ax = plt.subplots()
-    sns.histplot(df['target'], ax=ax)
+    #sns.displot(df_fixed['target'], ax=ax, hue='target')
+    sns.histplot(data=df_fixed, x='target', hue='target', multiple='stack')
+    legend = ax.get_legend()
+    legend.set_title("Type de vin")
+    ax.set_xlabel('')
     st.pyplot(fig)
 
-    st.write(df['target'].value_counts())
+    st.write(df_fixed['target'].value_counts())
 
     title('Pairplot')
     title("Choisissez les variables à afficher", 3)
     # Liste des colonnes numériques
     cols = st.columns(3)
-    num_cols = df.select_dtypes(include="number").columns.tolist()
+    num_cols = df_fixed.select_dtypes(include="number").columns.tolist()
     # Checkbox pour chaque variable numérique
     selected_vars = ['target']
     for i, col_name in enumerate(num_cols):
@@ -87,7 +104,7 @@ with visualisations:
     else:
         # Création du pairplot avec Seaborn
         if st.button("Mettre à jour le graphique", disabled=disabled):
-            st.session_state.pairplot_fig = sns.pairplot(df[selected_vars], hue='target')
+            st.session_state.pairplot_fig = sns.pairplot(df_fixed[selected_vars], hue='target')
             st.session_state.pairplot_fig.legend.set_title("Type de vin")
             # Affichage dans Streamlit
             st.pyplot(st.session_state.pairplot_fig)
@@ -95,9 +112,73 @@ with visualisations:
             st.pyplot(st.session_state.pairplot_fig)
 
     title('Matrice de corrélation')
-    df_num = df[num_cols]
-    corr = df_num.corr()
+    df_fixed_num = df_fixed[num_cols]
+    corr = df_fixed_num.corr()
     fig, ax = plt.subplots()
     sns.heatmap(corr, annot=True, annot_kws={'size': 6}, fmt='.2f', cmap='coolwarm', cbar=True, ax=ax, center=0,
                 linewidths=.5)
     st.pyplot(fig)
+
+with modelisation:
+
+    title('Division des données')
+    target = ["target"]
+    features = [col for col in df_fixed.columns if col not in target]
+
+    print(features)
+
+    X_train, X_test, y_train, y_test = model_selection.train_test_split(
+        df_fixed[features],
+        df_fixed[target],
+        test_size=0.2,
+        random_state=42
+    )
+
+    X_train.columns
+
+    cat_col = "target"
+
+    preprocessor = compose.ColumnTransformer(
+        transformers=[],
+        remainder="passthrough"
+    )
+
+    pipe = pipeline.Pipeline(
+        steps=[
+            ('preprocessor', preprocessor),
+            ('scaler', StandardScaler()),
+            ('regressor', ensemble.RandomForestRegressor())
+        ]
+    )
+
+    depths = [3, 5, 7]
+    n_estimators = [100, 200, 300]
+
+    pipe.fit(X_train, y_train)
+
+
+
+    # gridsearch = model_selection.GridSearchCV(
+    #     pipe,
+    #     param_grid={
+    #         "regressor__max_depth": depths,
+    #         "regressor__n_estimators": n_estimators,
+    #     },
+    #     scoring="neg_mean_squared_error",
+    #     cv=3,
+    #     n_jobs=-1,
+    #     refit=True,
+    #     return_train_score=True,
+    #     verbose=1,
+    # )
+    # gridsearch.fit(X_train, y_train)
+    #
+    # (
+    #     pd.DataFrame(gridsearch.cv_results_)
+    #     .sort_values(by="rank_test_score")
+    #     .drop("params", axis=1)
+    #     .style.background_gradient()
+    # )
+
+
+
