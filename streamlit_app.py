@@ -1,8 +1,11 @@
+from typing import Any, Union, List
+
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import streamlit as st
 from pandas import DataFrame, Series
+from pandas.core.dtypes.common import is_numeric_dtype, is_bool_dtype
 from sklearn import metrics
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
@@ -72,18 +75,21 @@ with tab_traitement_donnees:
                      "colonnes manquantes " if len(cols_without_missing) > 1 else "colonne manquante.")
 
             title('Gestion valeurs manquantes', 4)
-
-            selected_missing_data_col = st.selectbox("Label", [None] + cols_with_missing)
-            if selected_missing_data_col:
-                possible_values = pd.unique(df[selected_missing_data_col])
-                st.write("", possible_values)
-                custom_value = st.text_input(label='', placeholder="Valeur personnalisée pour les valeurs manquantes")
-                if custom_value:
-                    df_fixed[selected_missing_data_col] = df_fixed[selected_missing_data_col].replace({None: custom_value})
-                else:
-                    df_fixed[selected_missing_data_col] = df[selected_missing_data_col]
-                if st.button("Supprimer les lignes avec une cellule manquante"):
-                    df_fixed.drop(columns=selected_missing_data_col)
+            if st.button('Abandonner les lignes avec au moins une cellule vide'):
+                df_fixed = df_fixed.dropna()
+                st.success("Toutes les lignes avec au moins une valeur manquante on été supprimées.")
+            if st.button("Remplacer les valeurs manquantes par des valeurs par défaut"):
+                for col in df.columns:
+                    dtype = df[col].dtype
+                    default_value: Union[Any]
+                    if is_numeric_dtype(dtype):
+                        default_value = 0
+                    elif is_bool_dtype(dtype):
+                        default_value = False
+                    else:
+                        default_value = "Unknown"
+                    df_fixed[col] = df_fixed[col].fillna(default_value)
+                st.success("Toutes les valeurs manquantes ont été remplacées.")
         else:
             st.write("Il n'y a aucune valeurs manquantes.")
 
@@ -92,13 +98,25 @@ with tab_traitement_donnees:
 
         title('Type des colonnes', 2)
         st.write(df.dtypes)
-        title('Observation', 3)
-        st.write(
-            "Comme la colonne target contient des valeurs catégoriques, on regarde s'il n'y a pas de valeurs incohérentes."
-        )
-        title('Valeurs possibles dans les targets', 2)
-        target_values = set(df['target'])
-        st.write(target_values)
+
+        # Sélection de target
+        title("Selection de la colonne 'target'")
+        columns_tolist = df_fixed.columns.tolist()
+        selected_target: None | str = None
+        target_col_index = None
+        try:
+            target_col_index = [col.lower() for col in columns_tolist].index('target')
+        except ValueError:
+            pass
+        selected_target = columns_tolist[target_col_index] if target_col_index else None
+        if not selected_target:
+            selected_target = st.selectbox('Veuillez sélectionner la colonne target : ', [None] + columns_tolist, )
+
+        if selected_target:
+            title('Valeurs possibles dans les targets', 2)
+            target_values: List[Any] = df_fixed[selected_target].unique().tolist()
+            target_values.sort()
+            st.write(target_values)
 
 with visualisations:
     if uploaded_file is not None:
@@ -107,13 +125,13 @@ with visualisations:
 
         title('Visualisation des variables catégorielles')
         fig, ax = plt.subplots()
-        sns.histplot(data=df_fixed, x='target', hue='target', multiple='stack')
+        sns.histplot(data=df_fixed, x=selected_target, hue=selected_target, multiple='stack')
         legend = ax.get_legend()
         legend.set_title("Type de vin")
         ax.set_xlabel('')
         st.pyplot(fig)
 
-        st.write(df_fixed['target'].value_counts())
+        st.write(df_fixed[selected_target].value_counts())
 
         title('Pairplot')
         title("Choisissez les variables à afficher", 3)
@@ -121,7 +139,7 @@ with visualisations:
         cols = st.columns(3)
         num_cols = df_fixed.select_dtypes(include="number").columns.tolist()
         # Checkbox pour chaque variable numérique
-        selected_vars = ['target']
+        selected_vars = [selected_target]
         for i, col_name in enumerate(num_cols):
             with cols[i % 3]:
                 if st.checkbox(col_name, value=False):
@@ -133,7 +151,7 @@ with visualisations:
         else:
             # Création du pairplot avec Seaborn
             if st.button("Mettre à jour le graphique", disabled=disabled):
-                st.session_state.pairplot_fig = sns.pairplot(df_fixed[selected_vars], hue='target')
+                st.session_state.pairplot_fig = sns.pairplot(df_fixed[selected_vars], hue=selected_target)
                 st.session_state.pairplot_fig.legend.set_title("Type de vin")
                 # Affichage dans Streamlit
                 st.pyplot(st.session_state.pairplot_fig)
@@ -151,8 +169,10 @@ with visualisations:
 with modelisation:
     if uploaded_file is not None:
         title('Division des données')
-        target = "target"
+        target = selected_target
         features = [col for col in df_fixed.columns if col not in target]
+        num_features = [col for col in features if is_numeric_dtype(col) or is_bool_dtype(col)]
+        object_features = [feature for feature in features not in num_features]
 
         pourcentage = st.number_input(label="Pourcentage de données de test", placeholder=80, step=1, min_value=1,
                                       max_value=100, value=20)
