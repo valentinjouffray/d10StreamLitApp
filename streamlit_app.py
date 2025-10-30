@@ -30,12 +30,8 @@ tab_traitement_donnees, visualisations, modelisation, machine_learning, evaluati
     ]
 )
 
-
-
 with tab_traitement_donnees:
-
     uploaded_file = st.file_uploader("Choisissez un fichier CSV", type="csv")
-
 
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file, index_col=0)
@@ -53,7 +49,6 @@ with tab_traitement_donnees:
 
         title("Est-ce qu'il y a des valeurs manquantes ?", 2)
 
-
         st.write(df.isnull().sum())
 
         st.write("Nombre de valeur manquante totale: ", df.isnull().sum().aggregate(lambda x: sum(x)))
@@ -70,15 +65,30 @@ with tab_traitement_donnees:
 
         title('Observation', 3)
 
-        if len(cols_with_missing) > 0:
-            st.write("Il y a ", len(cols_with_missing), "colonnes manquantes " if len(cols_without_missing) > 1 else "colonne manquante.")
+        df_fixed = df
 
+        if len(cols_with_missing) > 0:
+            st.write("Il y a ", len(cols_with_missing),
+                     "colonnes manquantes " if len(cols_without_missing) > 1 else "colonne manquante.")
 
             title('Gestion valeurs manquantes', 4)
 
-            st.multiselect("Label", cols_with_missing)
+            selected_missing_data_col = st.selectbox("Label", [None] + cols_with_missing)
+            if selected_missing_data_col:
+                possible_values = pd.unique(df[selected_missing_data_col])
+                st.write("", possible_values)
+                custom_value = st.text_input(label='', placeholder="Valeur personnalisée pour les valeurs manquantes")
+                if custom_value:
+                    df_fixed[selected_missing_data_col] = df_fixed[selected_missing_data_col].replace({None: custom_value})
+                else:
+                    df_fixed[selected_missing_data_col] = df[selected_missing_data_col]
+                if st.button("Supprimer les lignes avec une cellule manquante"):
+                    df_fixed.drop(columns=selected_missing_data_col)
         else:
             st.write("Il n'y a aucune valeurs manquantes.")
+
+        title("Après modifications", 2)
+        st.write(df_fixed.head(50))
 
         title('Type des colonnes', 2)
         st.write(df.dtypes)
@@ -89,17 +99,6 @@ with tab_traitement_donnees:
         title('Valeurs possibles dans les targets', 2)
         target_values = set(df['target'])
         st.write(target_values)
-        title('Observation', 3)
-        st.write(
-            "Il semble y avoir une typo dans la catégorie 'Vin éuilibré', il faut modifier les valeurs incorrectes dans la colonne 'target'."
-        )
-
-        df_fixed = df
-
-        df_fixed['target'] = df_fixed['target'].replace({'Vin éuilibré': 'Vin équilibré'})
-        title('Valeurs possibles après correction de la typo', 2)
-        st.write(set(df_fixed['target']))
-
 
 with visualisations:
     if uploaded_file is not None:
