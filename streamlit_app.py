@@ -20,17 +20,15 @@ sns.set_context(rc={'patch.linewidth': 0.15})
 
 st.set_page_config(
     page_title="Projet analyse données de vin",
-    page_icon=':wine:',
+    page_icon=':wine_glass:',
 )
 
-tab_traitement_donnees, visualisations, modelisation, machine_learning, evaluation = st.tabs(
+tab_traitement_donnees, visualisations, modelisation = st.tabs(
     [
         "Traitement des données",
         "Visualisations",
         "Modelisation",
-        "Machine Learning",
-        "Evaluation"
-    ]
+    ],
 )
 
 with tab_traitement_donnees:
@@ -41,11 +39,16 @@ with tab_traitement_donnees:
         st.stop()
     df = pd.read_csv(uploaded_file, index_col=0)
 
-    title('Data Frame', 2)
+    title('Échantillon de données', )
 
     sample = df.sample(10)
 
     st.dataframe(sample)
+
+    title('Vérification des colonnes')
+
+    title('Résumé des données', 2)
+    st.write(df.describe())
 
     columns = df.columns
 
@@ -71,9 +74,7 @@ with tab_traitement_donnees:
     with cols_names[0]:
         st.write("Colonnes avec des valeurs manquantes :", cols_with_missing)
     with cols_names[1]:
-        st.write("Colonnes avec des valeurs manquantes :", cols_without_missing)
-
-    title('Observation', 3)
+        st.write("Colonnes sans valeurs manquantes :", cols_without_missing)
 
     df_fixed = df
 
@@ -173,6 +174,7 @@ with visualisations:
             st.pyplot(st.session_state.pairplot_fig)
 
     title('Matrice de corrélation')
+    # TODO: Intégrer la target dans la matrice de corrélation
     df_fixed_num = df_fixed[num_cols]
     corr = df_fixed_num.corr()
     fig, ax = plt.subplots()
@@ -191,6 +193,7 @@ with modelisation:
     pourcentage = st.number_input(label="Pourcentage de données de test", placeholder=80, step=1, min_value=1,
                                   max_value=100, value=20)
 
+    title('Machine Learning')
     X_train: DataFrame
     X_test: DataFrame
     y_train: Series
@@ -217,6 +220,8 @@ with modelisation:
         remainder="passthrough"
     )
 
+    title('Algorithme Random Forest Classifier')
+    title('Personnalisation des hyperparamètres', 2)
     profondeur_perso = st.number_input(label='Profondeur personalisée (0 pour valeur par défaut)', min_value=0,
                                        max_value=500, step=1)
     nb_max_feuilles = st.number_input(label='Nombre maximal de feuilles personalisée (0 pour valeur par défaut)',
@@ -226,7 +231,7 @@ with modelisation:
         steps=[
             ('preprocessor', preprocessor),
             ('scaler', StandardScaler(with_mean=False)),
-            ('regressor',
+            ('random_forest_classifier',
              RandomForestClassifier(random_state=42, max_depth=profondeur_perso if profondeur_perso > 0 else None,
                                     max_leaf_nodes=nb_max_feuilles if nb_max_feuilles > 0 else None))
         ]
@@ -254,4 +259,8 @@ with modelisation:
         with col:
             st.write(message)
 
-    st.write(df_test_predict)
+    st.write(df_test_predict.head(20))
+
+    # TODO: matrice de confusion
+
+    # TODO: GridSearch(CV)
