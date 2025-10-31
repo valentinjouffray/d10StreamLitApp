@@ -124,7 +124,7 @@ with tab_traitement_donnees:
 
     title("Après modifications", 2)
     st.write(df_fixed.head(50))
-    st.write(f"Nombre de ligne: ",len(df_fixed))
+    st.write(f"Nombre de ligne: ", len(df_fixed))
 
     # Sélection de target
     title("Selection de la colonne 'target'")
@@ -243,8 +243,9 @@ with modelisation:
     title('Personnalisation des hyperparamètres', 2)
     profondeur_perso = st.number_input(label='Profondeur personalisée (0 pour valeur par défaut)', min_value=0,
                                        max_value=500, step=1)
-    nb_max_feuilles = st.number_input(label='Nombre maximal de feuilles personalisée (0 pour valeur par défaut)',
-                                      min_value=0, max_value=50, step=1)
+    nb_min_split = st.number_input(
+        label='Nombre minimal d’échantillons pour pouvoir être scindé (0 pour valeur par défaut)',
+        min_value=0, max_value=50, step=1)
 
     pipe = Pipeline(
         steps=[
@@ -252,7 +253,7 @@ with modelisation:
             ('scaler', StandardScaler(with_mean=False)),
             ('random_forest_classifier',
              RandomForestClassifier(random_state=42, max_depth=profondeur_perso if profondeur_perso > 0 else None,
-                                    max_leaf_nodes=nb_max_feuilles if nb_max_feuilles > 0 else None))
+                                    max_leaf_nodes=nb_min_split if nb_min_split > 0 else None))
         ]
     )
 
@@ -280,8 +281,6 @@ with modelisation:
 
     st.write(df_test_predict.head(20))
 
-    # TODO: matrice de confusion
-
     title("Matrice de confusion du test", 2)
     cm = metrics.confusion_matrix(y_test, test_predict)
     fig, ax = plt.subplots()
@@ -290,8 +289,6 @@ with modelisation:
     ax.set_ylabel('Valeurs réelles')
     st.pyplot(fig)
 
-    # TODO: GridSearch(CV)
-
     title("Optimisation avec GridSearchCV", 2)
     st.write("Recherche automatique des meilleures hyper-paramètres")
 
@@ -299,19 +296,25 @@ with modelisation:
     default_split_param = [2, 5, 10, 20]
     default_cv_param = 3
 
-    depth_param = st.number_input(label=f"Ajout d'un paramètre de recherche de profondeur aux valeurs par défauts({default_depth_param} pour valeur par défaut)", min_value=0,
-                                       max_value=500, step=1)
-    split_param = st.number_input(label=f"Ajout d'un paramètre de nombre maximal de feuilles personnalisées aux valeurs par défauts({default_split_param} pour valeur par défaut)",
-                                      min_value=0, max_value=50, step=1)
-    cv_param = st.number_input(label=f"Ajout d'un paramètre de crosse value ({default_cv_param} par défaut)", min_value=0, max_value=10, step=1)
-
+    depth_param = st.number_input(
+        label=f"Ajout d'un paramètre de recherche de profondeur aux valeurs par défauts({default_depth_param} pour valeur par défaut)",
+        min_value=0,
+        max_value=500, step=1)
+    split_param = st.number_input(
+        label=f"Ajout d'un paramètre de nombre minimal d’échantillons personnalisées aux valeurs par défauts({default_split_param} pour valeur par défaut)",
+        min_value=0, max_value=50, step=1)
+    cv_param = st.number_input(label=f"Ajout d'un paramètre de crosse value ({default_cv_param} par défaut)",
+                               min_value=0, max_value=10, step=1)
 
     param_grid = {
-        'random_forest_classifier__max_depth': default_depth_param + [depth_param if depth_param > 0 and depth_param not in default_depth_param else None],
-        'random_forest_classifier__min_samples_split': default_split_param + [split_param if split_param > 0 and split_param not in default_split_param else None],
+        'random_forest_classifier__max_depth': default_depth_param + [
+            depth_param if depth_param > 0 and depth_param not in default_depth_param else None],
+        'random_forest_classifier__min_samples_split': default_split_param + [
+            split_param if split_param > 0 and split_param not in default_split_param else None],
     }
 
-    grid_search = GridSearchCV(pipe, param_grid=param_grid, scoring='accuracy', cv=cv_param if cv_param > 0 else default_cv_param, n_jobs=-1)
+    grid_search = GridSearchCV(pipe, param_grid=param_grid, scoring='accuracy',
+                               cv=cv_param if cv_param > 0 else default_cv_param, n_jobs=-1)
     grid_search.fit(X_train, y_train)
 
     st.success("Meilleures hyper-paramètres trouvés :")
