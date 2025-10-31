@@ -9,7 +9,7 @@ from pandas.core.dtypes.common import is_numeric_dtype, is_bool_dtype
 from sklearn import metrics
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 
@@ -19,8 +19,8 @@ sns.set_style('whitegrid')
 sns.set_context(rc={'patch.linewidth': 0.15})
 
 st.set_page_config(
-    page_title="Projet analyse données de vin",
-    page_icon=':wine_glass:',
+    page_title="Analyse de csv",
+    page_icon=':bar_chart:',
 )
 
 tab_traitement_donnees, visualisations, modelisation = st.tabs(
@@ -112,8 +112,19 @@ with tab_traitement_donnees:
         st.warning("Veuillez décider de l'action à prendre avec les données manquantes")
         st.stop()
 
+    title("Doublons", 2)
+    if df_fixed.duplicated().sum() > 0:
+
+        st.write(f"Nombre de doublons : {df_fixed.duplicated().sum()}")
+        if st.button("Supprimer les doublons détectés"):
+            df_fixed = df_fixed.drop_duplicates()
+            st.success("Doublons supprimés.")
+    else:
+        st.write(f"Aucun doublons")
+
     title("Après modifications", 2)
     st.write(df_fixed.head(50))
+    st.write(f"Nombre de ligne: ",len(df_fixed))
 
     # Sélection de target
     title("Selection de la colonne 'target'")
@@ -144,7 +155,8 @@ with visualisations:
 
     title('Visualisation des variables catégorielles')
     fig, ax = plt.subplots()
-    sns.histplot(data=df_fixed, x=selected_target)
+    sns.histplot(data=df_fixed, x=selected_target, hue=selected_target)
+    ax.legend().remove()
     st.pyplot(fig)
 
     st.write(df_fixed[selected_target].value_counts())
@@ -155,7 +167,7 @@ with visualisations:
     cols = st.columns(3)
     num_cols = df_fixed.select_dtypes(include="number").columns.tolist()
     # Checkbox pour chaque variable numérique
-    selected_vars = []
+    selected_vars = [selected_target]
     for i, col_name in enumerate(num_cols):
         with cols[i % 3]:
             if st.checkbox(col_name, value=False):
@@ -167,17 +179,24 @@ with visualisations:
     else:
         # Création du pairplot avec Seaborn
         if st.button("Mettre à jour le graphique", disabled=disabled):
-            st.session_state.pairplot_fig = sns.pairplot(df_fixed[selected_vars])
+            st.session_state.pairplot_fig = sns.pairplot(df_fixed[selected_vars], hue=selected_target)
             # Affichage dans Streamlit
             st.pyplot(st.session_state.pairplot_fig)
         elif st.session_state.pairplot_fig is not None:
             st.pyplot(st.session_state.pairplot_fig)
 
     title('Matrice de corrélation')
-    # TODO: Intégrer la target dans la matrice de corrélation
-    df_fixed_num = df_fixed[num_cols]
-    corr = df_fixed_num.corr()
-    fig, ax = plt.subplots()
+
+    df_corr = df_fixed.copy()
+
+    if not is_numeric_dtype(df_corr[selected_target]):
+        df_corr[selected_target] = df_corr[selected_target].astype('category').cat.codes
+
+    df_corr_num = df_corr.select_dtypes(include="number")
+
+    corr = df_corr_num.corr()
+
+    fig, ax = plt.subplots(figsize=(10, 5))
     sns.heatmap(corr, annot=True, annot_kws={'size': 6}, fmt='.2f', cmap='coolwarm', cbar=True, ax=ax, center=0,
                 linewidths=.5)
     st.pyplot(fig)
@@ -253,7 +272,7 @@ with modelisation:
     acc_train = metrics.accuracy_score(y_train, train_predict)
     acc_test = metrics.accuracy_score(y_test, test_predict)
     scores = [acc_train, acc_test]
-    messages = [f"Accuracy à lentraînement : {acc_train}", f"Accuracy aux tests : {acc_test}"]
+    messages = [f"Accuracy à lentraînement : {acc_train:.3f}", f"Accuracy aux tests : {acc_test:.3f}"]
     text_cols = st.columns(2, border=True)
     for col, message in zip(text_cols, messages):
         with col:
@@ -263,4 +282,42 @@ with modelisation:
 
     # TODO: matrice de confusion
 
+    title("Matrice de confusion du test", 2)
+    cm = metrics.confusion_matrix(y_test, test_predict)
+    fig, ax = plt.subplots()
+    sns.heatmap(cm, annot=True, fmt="d", cmap='Blues', cbar=False, ax=ax)
+    ax.set_xlabel('Prédiction')
+    ax.set_ylabel('Valeurs réelles')
+    st.pyplot(fig)
+
     # TODO: GridSearch(CV)
+
+    title("Optimisation avec GridSearchCV", 2)
+    st.write("Recherche automatique des meilleures hyper-paramètres")
+
+    default_depth_param = [None, 5, 10, 20]
+    default_split_param = [2, 5, 10, 20]
+    default_cv_param = 3
+
+    depth_param = st.number_input(label=f"Ajout d'un paramètre de recherche de profondeur aux valeurs par défauts({default_depth_param} pour valeur par défaut)", min_value=0,
+                                       max_value=500, step=1)
+    split_param = st.number_input(label=f"Ajout d'un paramètre de nombre maximal de feuilles personnalisées aux valeurs par défauts({default_split_param} pour valeur par défaut)",
+                                      min_value=0, max_value=50, step=1)
+    cv_param = st.number_input(label=f"Ajout d'un paramètre de crosse value ({default_cv_param} par défaut)", min_value=0, max_value=10, step=1)
+
+
+    param_grid = {
+        'random_forest_classifier__max_depth': default_depth_param + [depth_param if depth_param > 0 and depth_param not in default_depth_param else None],
+        'random_forest_classifier__min_samples_split': default_split_param + [split_param if split_param > 0 and split_param not in default_split_param else None],
+    }
+
+    grid_search = GridSearchCV(pipe, param_grid=param_grid, scoring='accuracy', cv=cv_param if cv_param > 0 else default_cv_param, n_jobs=-1)
+    grid_search.fit(X_train, y_train)
+
+    st.success("Meilleures hyper-paramètres trouvés :")
+    st.json(grid_search.best_params_)
+
+    best_model = grid_search.best_estimator_
+    y_pred_best = best_model.predict(X_test)
+    acc_best = metrics.accuracy_score(y_test, y_pred_best)
+    st.write(f"Accuracy du meilleur modèle : **{acc_best:.3f}**")
